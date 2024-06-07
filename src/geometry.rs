@@ -705,6 +705,50 @@ pub trait Geom:
     ///            "POLYGON ((50.0 5.0, 10.0 8.0, 10.0 10.0, 100.0 190.0, 150.0 30.0, 150.0 10.0, 50.0 5.0))");
     /// ```
     fn convex_hull(&self) -> GResult<Geometry>;
+    /// Documentation from [postgis](https://postgis.net/docs/ST_ConcaveHull.html):
+    ///
+    /// > A concave hull is a (usually) concave geometry which contains the input,
+    /// > and whose vertices are a subset of the input vertices.
+    /// > In the general case the concave hull is a Polygon.
+    /// > The concave hull of two or more collinear points is a two-point LineString.
+    /// > The concave hull of one or more identical points is a Point.
+    /// > The polygon will not contain holes unless the optional param_allow_holes argument is specified as true.
+    /// >
+    /// > One can think of a concave hull as "shrink-wrapping" a set of points.
+    /// > This is different to the convex hull, which is more like wrapping a rubber band around the points.
+    /// > A concave hull generally has a smaller area and represents a more natural boundary for the input points.
+    /// >
+    /// > The param_pctconvex controls the concaveness of the computed hull.
+    /// > A value of 1 produces the convex hull. Values between 1 and 0 produce hulls of increasing concaveness.
+    /// > A value of 0 produces a hull with maximum concaveness (but still a single polygon).
+    /// > Choosing a suitable value depends on the nature of the input data, but often values between 0.3 and 0.1 produce reasonable results.
+    /// > Technically, the param_pctconvex determines a length as a fraction of the difference between the longest and shortest edges in the Delaunay Triangulation of the input points.
+    /// > Edges longer than this length are "eroded" from the triangulation. The triangles remaining form the concave hull.
+    /// >
+    /// > For point and linear inputs, the hull will enclose all the points of the inputs.
+    /// > For polygonal inputs, the hull will enclose all the points of the input and also all the areas covered by the input.
+    /// > If you want a point-wise hull of a polygonal input, convert it to points first using ST_Points.
+    /// >
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use geos::{Geom, Geometry};
+    ///
+    /// let mut geom1 = Geometry::new_from_wkt("MULTILINESTRING((100 190,10 8),
+    ///                                                         (150 10, 20 30))")
+    ///                          .expect("Invalid geometry");
+    /// let mut geom2 = Geometry::new_from_wkt("MULTIPOINT(50 5, 150 30, 50 10, 10 10)")
+    ///                          .expect("Invalid geometry");
+    ///
+    /// let geom = geom1.union(&geom2).expect("union failed");
+    /// let convex_hull_geom = geom.convex_hull().expect("convex_hull failed");
+    ///
+    /// assert_eq!(convex_hull_geom.to_wkt_precision(1).unwrap(),
+    ///            "POLYGON ((50.0 5.0, 10.0 8.0, 10.0 10.0, 100.0 190.0, 150.0 30.0, 150.0 10.0, 50.0 5.0))");
+    /// ```
+    #[cfg(any(feature = "v3_11_0"))]
+    fn concave_hull(&self, ratio: f64, allow_holes: bool) -> GResult<Geometry>;
     /// Returns the closure of the combinatorial boundary of `self`.
     ///
     /// # Example
@@ -1694,6 +1738,14 @@ impl$(<$lt>)? Geom for $ty_name$(<$lt>)? {
         unsafe {
             let ptr = GEOSConvexHull_r(self.get_raw_context(), self.as_raw());
             Geometry::new_from_raw(ptr, self.clone_context(), "convex_hull")
+        }
+    }
+
+    #[cfg(any(feature = "v3_11_0"))]
+    fn concave_hull(&self, ratio: f64, allow_holes: bool) -> GResult<Geometry> {
+        unsafe {
+            let ptr = GEOSConcaveHull_r(self.get_raw_context(), self.as_raw(), ratio, allow_holes as _);
+            Geometry::new_from_raw(ptr, self.clone_context(), "concave_hull")
         }
     }
 
